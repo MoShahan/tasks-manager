@@ -1,151 +1,239 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+import logo from "./assets/logo.svg";
+import EmptyState from "./components/EmptyState";
+import FilterBar from "./components/FilterBar";
+import TaskColumn from "./components/TaskColumn";
+import TaskList from "./components/TaskList";
+import TaskModal from "./components/TaskModal";
+import ToastStack from "./components/ToastStack";
+import ViewToggle from "./components/ViewToggle";
+import { useTaskStore } from "./hooks/useTaskStore";
+import { useToasts } from "./hooks/useToasts";
+import { filterTasks, sortTasks, sortTasksBy } from "./utils/tasks";
+import type {
+  ListSortKey,
+  SortDirection,
+  Task,
+  TaskDraft,
+  TaskFilters,
+  ViewMode,
+} from "./types";
+
 import "./App.css";
 
-import { v4 as uuidv4 } from "uuid";
-import type { TaskType } from "./types";
-import Column from "./Column";
-import { COMPLETED, IN_PROGRESS, PENDING } from "./constants";
-
-const demo_tasks: TaskType[] = [
-  {
-    id: "1",
-    title: "task 1",
-    status: PENDING,
-    description: "This is task 1",
-    priority: "high",
-    date: new Date(),
-  },
-  {
-    id: "2",
-    title: "task 2",
-    status: IN_PROGRESS,
-    description: "This is task 2",
-    priority: "low",
-    date: new Date(),
-  },
-  {
-    id: "2",
-    title: "abc",
-    status: IN_PROGRESS,
-    description: "This is task 2",
-    priority: "medium",
-    date: new Date(),
-  },
-  {
-    id: "2",
-    title: "def",
-    status: IN_PROGRESS,
-    description: "This is task 2",
-    priority: "high",
-    date: new Date(),
-  },
-  {
-    id: "3",
-    title: "task 3",
-    status: COMPLETED,
-    description: "This is task 3",
-    priority: "low",
-    date: new Date(),
-  },
-];
+const defaultFilters: TaskFilters = {
+  search: "",
+  status: "all",
+  priority: "all",
+};
 
 function App() {
-  const [tasks, setTasks] = useState<TaskType[]>(demo_tasks);
-  const [filteredTasks, setFilteredTasks] = useState<TaskType[]>(tasks);
+  const { tasks, create, update, complete, remove, duplicate, restore } =
+    useTaskStore();
+  const { toasts, push, dismiss } = useToasts();
+  const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [view, setView] = useState<ViewMode>("board");
+  const [listSort, setListSort] = useState<{
+    key: ListSortKey;
+    direction: SortDirection;
+  }>({ key: "dueDate", direction: "asc" });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const [searchWord, setSearchWord] = useState<string>("");
+  const hasActiveFilters =
+    filters.search.trim() !== "" ||
+    filters.status !== "all" ||
+    filters.priority !== "all";
 
-  const handleAddTask = () => {
-    setTasks((prev) => [
-      ...prev,
-      { id: uuidv4(), title: "New Title", status: PENDING },
-    ]);
+  const filteredTasks = useMemo(
+    () => filterTasks(tasks, filters),
+    [tasks, filters],
+  );
+
+  const boardTasks = useMemo(
+    () => sortTasks(filteredTasks, sortDirection),
+    [filteredTasks, sortDirection],
+  );
+
+  const listTasks = useMemo(
+    () => sortTasksBy(filteredTasks, listSort.key, listSort.direction),
+    [filteredTasks, listSort],
+  );
+
+  const visibleTasks = view === "board" ? boardTasks : listTasks;
+
+  const pendingTasks = boardTasks.filter((task) => task.status === "pending");
+  const inProgressTasks = boardTasks.filter(
+    (task) => task.status === "in-progress",
+  );
+  const completedTasks = boardTasks.filter(
+    (task) => task.status === "completed",
+  );
+
+  const openCreate = () => {
+    setEditingTask(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (task: Task) => {
+    setEditingTask(task);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingTask(null);
+  };
+
+  const handleSubmit = (draft: TaskDraft) => {
+    if (editingTask) {
+      update(editingTask.id, draft);
+      push({ message: `Updated “${draft.title}”` });
+    } else {
+      create(draft);
+      push({ message: `Created “${draft.title}”` });
+    }
+    closeModal();
   };
 
   const handleComplete = (taskId: string) => {
-    const idx = tasks.findIndex((task) => task.id === taskId);
-    const tempTasks = [...tasks];
-    tempTasks[idx].status = COMPLETED;
-    setTasks(tempTasks);
-  };
-
-  const handleEdit = () => {};
-
-  const handleDelete = (taskId: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
-  };
-
-  const handleSearch = () => {
-    const newTasks = tasks.filter(
-      (task) =>
-        task.title.toLowerCase().includes(searchWord.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchWord.toLowerCase()),
-    );
-    setFilteredTasks(newTasks);
-  };
-
-  const clearSearch = () => {
-    setSearchWord("");
-    setFilteredTasks(tasks);
-  };
-
-  const handleFilter = (arg: "status" | "priority", value: string) => {
-    switch (arg) {
-      case "priority":
-        setFilteredTasks(tasks.filter((task) => task.priority === value));
-        return;
-      case "status":
-        setFilteredTasks(tasks.filter((task) => task.status === value));
-        return;
+    const task = tasks.find((item) => item.id === taskId);
+    complete(taskId);
+    if (task) {
+      push({ message: `Marked “${task.title}” completed` });
     }
   };
 
+  const handleDuplicate = (taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+    duplicate(taskId);
+    if (task) {
+      push({ message: `Duplicated “${task.title}”` });
+    }
+  };
+
+  const handleDelete = (taskId: string) => {
+    const index = tasks.findIndex((item) => item.id === taskId);
+    const task = tasks[index];
+    if (!task) {
+      return;
+    }
+
+    remove(taskId);
+    push({
+      message: `Deleted “${task.title}”`,
+      actionLabel: "Undo",
+      duration: 7000,
+      onAction: () => {
+        restore(task, index);
+        push({ message: `Restored “${task.title}”` });
+      },
+    });
+  };
+
+  const handleViewChange = (nextView: ViewMode) => {
+    setView(nextView);
+    if (nextView === "list") {
+      setListSort((current) =>
+        current.key === "dueDate"
+          ? { ...current, direction: sortDirection }
+          : current,
+      );
+    }
+  };
+
+  const handleListSort = (key: ListSortKey) => {
+    setListSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
+
+  const taskHandlers = {
+    onComplete: handleComplete,
+    onEdit: openEdit,
+    onDuplicate: handleDuplicate,
+    onDelete: handleDelete,
+  };
+
   return (
-    <main>
-      <div>
-        Search:{" "}
-        <input
-          type="text"
-          value={searchWord}
-          onChange={(e) => setSearchWord(e.target.value)}
-        />
-        <button onClick={handleSearch}>Search</button>
-        <button onClick={clearSearch}>Clear Search</button>
-      </div>
+    <div className="app">
+      <header className="app-header">
+        <div className="brand">
+          <img src={logo} alt="" className="brand-logo" width={36} height={36} />
+          <div>
+            <p className="brand-kicker">Task manager</p>
+            <h1>Recro Tasks</h1>
+          </div>
+        </div>
+        <div className="header-actions">
+          <ViewToggle view={view} onChange={handleViewChange} />
+          <button type="button" className="btn btn-primary" onClick={openCreate}>
+            Add task
+          </button>
+        </div>
+      </header>
 
-      <div>
-        Filter by Priority:{" "}
-        <button onClick={() => handleFilter("priority", "high")}>High</button>
-        <button onClick={() => handleFilter("priority", "medium")}>
-          Medium
-        </button>
-        <button onClick={() => handleFilter("priority", "low")}>Low</button>
-      </div>
+      <FilterBar
+        filters={filters}
+        sortDirection={sortDirection}
+        hasActiveFilters={hasActiveFilters}
+        showDueDateSort={view === "board"}
+        onSearchChange={(search) =>
+          setFilters((current) => ({ ...current, search }))
+        }
+        onStatusChange={(status) =>
+          setFilters((current) => ({ ...current, status }))
+        }
+        onPriorityChange={(priority) =>
+          setFilters((current) => ({ ...current, priority }))
+        }
+        onSortChange={setSortDirection}
+        onClear={() => {
+          setFilters(defaultFilters);
+          push({ message: "Filters cleared" });
+        }}
+      />
 
-      <button onClick={handleAddTask}>Add Task</button>
-      <div className="column-container">
-        <Column
-          title="Pending"
-          tasks={filteredTasks.filter((task) => task.status === PENDING)}
-          handleComplete={handleComplete}
-          handleEdit={handleEdit}
-          handleDelete={handleDelete}
+      {visibleTasks.length === 0 ? (
+        <EmptyState hasActiveFilters={hasActiveFilters} />
+      ) : view === "board" ? (
+        <div className="board">
+          <TaskColumn title="Pending" tasks={pendingTasks} {...taskHandlers} />
+          <TaskColumn
+            title="In Progress"
+            tasks={inProgressTasks}
+            {...taskHandlers}
+          />
+          <TaskColumn
+            title="Completed"
+            tasks={completedTasks}
+            {...taskHandlers}
+          />
+        </div>
+      ) : (
+        <TaskList
+          tasks={listTasks}
+          sortKey={listSort.key}
+          sortDirection={listSort.direction}
+          onSort={handleListSort}
+          {...taskHandlers}
         />
-        <Column
-          title="In Progress"
-          tasks={filteredTasks.filter((task) => task.status === IN_PROGRESS)}
-          handleComplete={handleComplete}
-          handleEdit={handleEdit}
-          handleDelete={handleDelete}
+      )}
+
+      {modalOpen ? (
+        <TaskModal
+          task={editingTask}
+          onClose={closeModal}
+          onSubmit={handleSubmit}
         />
-        <Column
-          title="Completed"
-          tasks={filteredTasks.filter((task) => task.status === COMPLETED)}
-          handleEdit={handleEdit}
-          handleDelete={handleDelete}
-        />
-      </div>
-    </main>
+      ) : null}
+
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
+    </div>
   );
 }
 
