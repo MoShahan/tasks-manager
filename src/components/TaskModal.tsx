@@ -1,0 +1,179 @@
+import type { FormEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+
+import type { Priority, Status } from "../constants";
+import {
+  PRIORITY_LABELS,
+  PRIORITY_VALUES,
+  STATUS_LABELS,
+  STATUS_VALUES,
+} from "../constants";
+import type { Task, TaskDraft } from "../types";
+import { fromDateInputValue, toDateInputValue, validateTaskTitle } from "../utils/tasks";
+
+import SelectField from "./SelectField";
+
+type TaskModalProps = {
+  task?: Task | null;
+  onClose: () => void;
+  onSubmit: (draft: TaskDraft) => void;
+};
+
+const defaultDueDate = () => {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + 7);
+  return date;
+};
+
+const TaskModal = ({ task, onClose, onSubmit }: TaskModalProps) => {
+  const titleId = useId();
+  const titleRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [status, setStatus] = useState<Status>(task?.status ?? "pending");
+  const [priority, setPriority] = useState<Priority>(task?.priority ?? "medium");
+  const [dueDate, setDueDate] = useState(
+    toDateInputValue(task?.dueDate ?? defaultDueDate()),
+  );
+  const [titleError, setTitleError] = useState<string | null>(null);
+
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const error = validateTaskTitle(title);
+    if (error) {
+      setTitleError(error);
+      titleRef.current?.focus();
+      return;
+    }
+
+    onSubmit({
+      title: title.trim(),
+      description: description.trim(),
+      status,
+      priority,
+      dueDate: fromDateInputValue(dueDate),
+    });
+  };
+
+  const heading = task ? "Edit task" : "Create task";
+
+  return (
+    <div
+      className="modal-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modal-header">
+          <h2 id={titleId}>{heading}</h2>
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            Close
+          </button>
+        </header>
+
+        <form className="modal-form" onSubmit={handleSubmit} noValidate>
+          <label className="field">
+            <span className="field-label">Title</span>
+            <input
+              ref={titleRef}
+              type="text"
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                if (titleError) {
+                  setTitleError(validateTaskTitle(event.target.value));
+                }
+              }}
+              aria-invalid={Boolean(titleError)}
+              aria-describedby={titleError ? "title-error" : undefined}
+            />
+            {titleError ? (
+              <span id="title-error" className="field-error" role="alert">
+                {titleError}
+              </span>
+            ) : null}
+          </label>
+
+          <label className="field">
+            <span className="field-label">Description</span>
+            <textarea
+              rows={4}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+
+          <div className="modal-grid">
+            <SelectField
+              label="Status"
+              value={status}
+              onChange={(value) => setStatus(value as Status)}
+              options={STATUS_VALUES.map((value) => ({
+                value,
+                label: STATUS_LABELS[value],
+              }))}
+            />
+
+            <SelectField
+              label="Priority"
+              value={priority}
+              onChange={(value) => setPriority(value as Priority)}
+              options={PRIORITY_VALUES.map((value) => ({
+                value,
+                label: PRIORITY_LABELS[value],
+              }))}
+            />
+          </div>
+
+          <label className="field">
+            <span className="field-label">Due date</span>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              required
+            />
+          </label>
+
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              {task ? "Save changes" : "Create task"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default TaskModal;
