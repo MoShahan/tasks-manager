@@ -1,78 +1,90 @@
-# React + TypeScript + Vite
+# Recro Tasks
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A dark-themed task board for creating, editing, completing, and filtering work across Pending, In Progress, and Completed columns.
 
-Currently, two official plugins are available:
+## Screenshots
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Board view
 
-## React Compiler
+Kanban layout with Pending, In Progress, and Completed columns. Search, status, priority, and due-date sort sit above the board. Each card shows priority, due date, and actions (complete, edit, duplicate, delete).
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+![Board view with three status columns and filter controls](docs/screenshots/board.png)
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+### List view
 
-## Expanding the ESLint configuration
+The same filtered tasks in a compact table. Click Title, Status, Priority, or Due date to sort. Incomplete rows keep a Mark completed action; completed rows do not.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+![List view with sortable columns for title, status, priority, and due date](docs/screenshots/list.png)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Create / edit task
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Modal for adding or updating a task. Title is required; description, status, priority, and due date can be set before saving.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+![Create task dialog with title, description, status, priority, and due date](docs/screenshots/modal.png)
 
+## Features
+
+- Create and edit tasks with title, description, status, priority, and due date
+- Title is required before a task can be saved
+- Delete a task, with confirmation
+- Mark a task as completed
+- Search by title
+- Filter by status and priority (filters combine)
+- Sort by due date, earliest or latest first
+- Empty state when nothing matches the current filters
+- Tasks persist in `localStorage` after a browser refresh
+- Seeded with realistic demo tasks on first load
+
+## Stack
+
+- React 19 + TypeScript
+- Vite
+- ESLint (import order + grouping)
+- Vitest + Testing Library
+- Husky + lint-staged (lint staged files before each commit)
+
+## Setup
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Open the local URL printed by Vite (usually `http://localhost:5173`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Other commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm run lint        # ESLint
+npm run test        # Vitest, single run
+npm run test:watch  # Vitest, watch mode
+npm run build       # production build
+npm run preview     # preview the production build
 ```
+
+## Persistence
+
+Tasks are saved to `localStorage` under the `recro-tasks` key. Clearing site data (or that key) restores the demo board on the next load.
+
+## Project structure
+
+```text
+src/
+  App.tsx                 # board shell, filters, modal wiring
+  components/             # columns, cards, filters, modal, empty state
+  constants.ts            # status and priority values
+  data/demoTasks.ts       # initial dummy tasks
+  hooks/useTaskStore.ts   # CRUD + localStorage
+  types.ts
+  utils/tasks.ts          # filter, sort, validate, serialize
+public/
+  favicon.svg
+  apple-touch-icon.png
+```
+
+## CI
+
+GitHub Actions run two workflows on `main`:
+
+- Lint
+- Test
